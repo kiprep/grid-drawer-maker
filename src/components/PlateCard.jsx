@@ -1,21 +1,29 @@
 import { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
+import PlatePreview3D from './PlatePreview3D';
+import PlateFailurePanel from './PlateFailurePanel';
 
-function PlateCard({ plate, onStatusChange, onExport }) {
+function PlateCard({ plate, onStatusChange, onExport, onMarkBinFailed, onRepackFailed }) {
   const { colors } = useTheme();
   const [showItems, setShowItems] = useState(false);
 
   const statusColors = {
     none: colors.input,
     printing: colors.warning,
-    done: colors.success
+    done: colors.success,
+    failed: colors.danger
   };
 
   const statusLabels = {
     none: 'Not Started',
     printing: 'Printing',
-    done: 'Done'
+    done: 'Done',
+    failed: 'Failed'
   };
+
+  const failedBinIds = plate.status === 'failed'
+    ? plate.items.map((item, idx) => item.status === 'failed' ? idx : null).filter(i => i !== null)
+    : [];
 
   const handleStatusChange = (e) => {
     onStatusChange(plate.id, e.target.value);
@@ -74,8 +82,14 @@ function PlateCard({ plate, onStatusChange, onExport }) {
           <option value="none">{statusLabels.none}</option>
           <option value="printing">{statusLabels.printing}</option>
           <option value="done">{statusLabels.done}</option>
+          <option value="failed">{statusLabels.failed}</option>
         </select>
       </div>
+
+      {/* 3D Preview (bin plates only) */}
+      {plate.type === 'bins' && plate.items.length > 0 && (
+        <PlatePreview3D plate={plate} failedBinIds={failedBinIds} />
+      )}
 
       {/* Dimensions */}
       <div style={{
@@ -133,6 +147,16 @@ function PlateCard({ plate, onStatusChange, onExport }) {
             </div>
           )}
         </div>
+      )}
+
+      {/* Failure Panel */}
+      {plate.status === 'failed' && onMarkBinFailed && (
+        <PlateFailurePanel
+          plate={plate}
+          failedBinIds={failedBinIds}
+          onToggleBin={(itemIndex, isFailed) => onMarkBinFailed(plate.id, itemIndex, isFailed)}
+          onRepack={onRepackFailed ? () => onRepackFailed(plate.id) : null}
+        />
       )}
 
       {/* Action Button */}

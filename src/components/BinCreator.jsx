@@ -394,15 +394,6 @@ function BinCreator({ onCreateBin, maxHeight }) {
                 <label style={checkboxLabelStyle}>
                   <input
                     type="checkbox"
-                    checked={binConfig.lid}
-                    onChange={(e) => updateConfig('lid', e.target.checked)}
-                    style={{ marginRight: '0.5rem' }}
-                  />
-                  <span style={{ color: colors.text }}>Lid</span>
-                </label>
-                <label style={checkboxLabelStyle}>
-                  <input
-                    type="checkbox"
                     checked={binConfig.fingerGrabs}
                     onChange={(e) => updateConfig('fingerGrabs', e.target.checked)}
                     style={{ marginRight: '0.5rem' }}

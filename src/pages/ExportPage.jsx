@@ -124,7 +124,7 @@ function ExportPage() {
           </p>
           <ul style={{ color: '#666', lineHeight: '1.8' }}>
             <li><strong>Baseplates/</strong> - Gridfinity baseplates optimized for your printer bed</li>
-            <li><strong>Hollow-Bins/</strong> - Stackable bins with dividers and lids</li>
+            <li><strong>Hollow-Bins/</strong> - Stackable bins with dividers</li>
             <li><strong>Solid-Bins/</strong> - Tool cutout bins with custom imprints</li>
             <li><strong>Spacers/</strong> - Fill pieces for gaps in your layout</li>
           </ul>

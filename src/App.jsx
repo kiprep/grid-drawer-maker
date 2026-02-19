@@ -5,7 +5,7 @@ import ProjectsPage from './pages/ProjectsPage';
 import BinPlacerPage from './pages/BinPlacerPage';
 import PrintQueuePage from './pages/PrintQueuePage';
 import ExportPage from './pages/ExportPage';
-import ChecklistPage from './pages/ChecklistPage';
+// ChecklistPage deprecated — functionality moved to PrintQueuePage
 import './App.css';
 
 function App() {
@@ -18,7 +18,7 @@ function App() {
           <Route path="/project/:projectId/placer" element={<BinPlacerPage />} />
           <Route path="/project/:projectId/print-queue" element={<PrintQueuePage />} />
           <Route path="/project/:projectId/export" element={<ExportPage />} />
-          <Route path="/project/:projectId/checklist" element={<ChecklistPage />} />
+          <Route path="/project/:projectId/checklist" element={<Navigate to="../print-queue" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>

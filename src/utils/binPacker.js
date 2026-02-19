@@ -216,6 +216,105 @@ function createNewPlate(plateNumber, width, depth) {
 }
 
 /**
+ * Repack failed bins into new reprint plates
+ * @param {Array} failedItems - Array of plate items that failed (already have width/depth in mm)
+ * @param {number} printerBedWidth - Maximum plate width in mm
+ * @param {number} printerBedDepth - Maximum plate depth in mm
+ * @returns {Array} - Array of reprint plate objects
+ */
+export function repackFailedBins(failedItems, printerBedWidth, printerBedDepth) {
+  if (!failedItems || failedItems.length === 0) {
+    return [];
+  }
+
+  // Reset placement data for repacking
+  const items = failedItems.map(item => ({
+    ...item,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    width: item.binData.width * GRIDFINITY_UNIT,
+    depth: item.binData.depth * GRIDFINITY_UNIT,
+    status: 'pending'
+  }));
+
+  // Sort by area (largest first)
+  items.sort((a, b) => (b.width * b.depth) - (a.width * a.depth));
+
+  const plates = [];
+
+  for (const binItem of items) {
+    let placed = false;
+
+    for (const plate of plates) {
+      if (tryPlaceOnPlate(binItem, plate, printerBedWidth, printerBedDepth)) {
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      const rotatedItem = {
+        ...binItem,
+        width: binItem.depth,
+        depth: binItem.width,
+        rotation: 90
+      };
+
+      for (const plate of plates) {
+        if (tryPlaceOnPlate(rotatedItem, plate, printerBedWidth, printerBedDepth)) {
+          Object.assign(binItem, rotatedItem);
+          placed = true;
+          break;
+        }
+      }
+    }
+
+    if (!placed) {
+      const plateNum = plates.length + 1;
+      const newPlate = {
+        id: `reprint-${Date.now()}-${plateNum}`,
+        name: `Reprint Plate ${plateNum}`,
+        type: 'reprint',
+        width: printerBedWidth,
+        depth: printerBedDepth,
+        status: 'none',
+        items: []
+      };
+
+      const fitsNormal = binItem.width <= printerBedWidth && binItem.depth <= printerBedDepth;
+      const fitsRotated = binItem.depth <= printerBedWidth && binItem.width <= printerBedDepth;
+
+      if (fitsNormal) {
+        binItem.x = 0;
+        binItem.y = 0;
+        newPlate.items.push({ ...binItem });
+        plates.push(newPlate);
+      } else if (fitsRotated) {
+        binItem.width = binItem.depth;
+        binItem.depth = binItem.binData.width * GRIDFINITY_UNIT;
+        binItem.rotation = 90;
+        binItem.x = 0;
+        binItem.y = 0;
+        newPlate.items.push({ ...binItem });
+        plates.push(newPlate);
+      } else {
+        plates.push({
+          ...newPlate,
+          name: `Reprint Plate ${plateNum} (OVERSIZED)`,
+          width: binItem.width,
+          depth: binItem.depth,
+          items: [{ ...binItem, x: 0, y: 0 }],
+          warning: 'This bin exceeds your printer bed dimensions'
+        });
+      }
+    }
+  }
+
+  return plates;
+}
+
+/**
  * Create a plate for an oversized bin (larger than printer bed)
  * @param {Object} binItem - Oversized bin item
  * @param {number} plateNumber - Plate number
