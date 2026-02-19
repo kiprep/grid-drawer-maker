@@ -4,6 +4,7 @@
  */
 
 const GRIDFINITY_UNIT = 42; // mm
+const ITEM_GAP = 1; // mm gap between items so they don't fuse during printing
 
 /**
  * Pack bins onto plates using First-Fit Decreasing algorithm
@@ -130,11 +131,13 @@ function tryPlaceOnPlate(binItem, plate, maxWidth, maxDepth) {
 function generateCandidatePositions(placedItems) {
   const candidates = [{ x: 0, y: 0 }];
 
-  // Add corners of each placed item as candidates
+  // Add gap-offset corners of each placed item as candidates.
+  // The ITEM_GAP offset ensures items are placed with a gap between them
+  // so they don't fuse during printing.
   for (const item of placedItems) {
-    candidates.push({ x: item.x + item.width, y: item.y });
-    candidates.push({ x: item.x, y: item.y + item.depth });
-    candidates.push({ x: item.x + item.width, y: item.y + item.depth });
+    candidates.push({ x: item.x + item.width + ITEM_GAP, y: item.y });
+    candidates.push({ x: item.x, y: item.y + item.depth + ITEM_GAP });
+    candidates.push({ x: item.x + item.width + ITEM_GAP, y: item.y + item.depth + ITEM_GAP });
   }
 
   // Remove duplicates
@@ -162,12 +165,13 @@ function generateCandidatePositions(placedItems) {
  * @returns {boolean} - True if item fits without overlap
  */
 function canFitAt(binItem, x, y, placedItems, maxWidth, maxDepth) {
-  // Check bounds
+  // Check bounds (item itself must fit, no gap needed at bed edges)
   if (x + binItem.width > maxWidth || y + binItem.depth > maxDepth) {
     return false;
   }
 
-  // Check overlap with existing items
+  // Check overlap with existing items.
+  // ITEM_GAP is enforced via gap-offset candidate positions in generateCandidatePositions.
   for (const item of placedItems) {
     if (rectanglesOverlap(
       x, y, binItem.width, binItem.depth,

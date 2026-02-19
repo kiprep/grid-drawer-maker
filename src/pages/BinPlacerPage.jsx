@@ -1029,6 +1029,8 @@ function BinPlacerPage() {
             <BinCreator
               onCreateBin={handleCreateBin}
               maxHeight={project.drawerHeight}
+              printerBedWidth={project.printerBedWidth}
+              printerBedDepth={project.printerBedDepth}
             />
           </div>
         </div>
@@ -1095,6 +1097,8 @@ function BinPlacerPage() {
               onSaveBin={handleSaveEditedBin}
               onClose={() => setEditingBin(null)}
               maxHeight={project.drawerHeight}
+              printerBedWidth={project.printerBedWidth}
+              printerBedDepth={project.printerBedDepth}
             />
           </div>
         </div>

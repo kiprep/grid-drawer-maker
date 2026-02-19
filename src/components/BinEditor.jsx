@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import BinPreview from './BinPreview';
 
-function BinEditor({ bin, onSaveBin, maxHeight, onClose }) {
+const GRIDFINITY_UNIT = 42; // mm
+
+function BinEditor({ bin, onSaveBin, maxHeight, onClose, printerBedWidth, printerBedDepth }) {
   const { colors } = useTheme();
   const [binType, setBinType] = useState(bin.type);
   const [binConfig, setBinConfig] = useState({
@@ -59,6 +61,8 @@ function BinEditor({ bin, onSaveBin, maxHeight, onClose }) {
   };
 
   const maxHeightUnits = Math.floor(maxHeight / 7);
+  const maxWidthUnits = printerBedWidth ? Math.floor(printerBedWidth / GRIDFINITY_UNIT) : 10;
+  const maxDepthUnits = printerBedDepth ? Math.floor(printerBedDepth / GRIDFINITY_UNIT) : 10;
 
   const inputStyle = {
     width: '100%',
@@ -154,11 +158,11 @@ function BinEditor({ bin, onSaveBin, maxHeight, onClose }) {
         </label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
           <div>
-            <label style={labelStyle}>Width</label>
+            <label style={labelStyle}>Width (max {maxWidthUnits})</label>
             <input
               type="number"
               min="1"
-              max="10"
+              max={maxWidthUnits}
               value={binConfig.width}
               onChange={(e) => updateConfig('width', Number(e.target.value))}
               onFocus={(e) => e.target.select()}
@@ -166,11 +170,11 @@ function BinEditor({ bin, onSaveBin, maxHeight, onClose }) {
             />
           </div>
           <div>
-            <label style={labelStyle}>Depth</label>
+            <label style={labelStyle}>Depth (max {maxDepthUnits})</label>
             <input
               type="number"
               min="1"
-              max="10"
+              max={maxDepthUnits}
               value={binConfig.depth}
               onChange={(e) => updateConfig('depth', Number(e.target.value))}
               onFocus={(e) => e.target.select()}
@@ -193,7 +197,8 @@ function BinEditor({ bin, onSaveBin, maxHeight, onClose }) {
           </div>
         </div>
         <p style={{ fontSize: '0.75rem', color: colors.textSecondary, marginTop: '0.25rem' }}>
-          Physical: {binConfig.width * 42}mm × {binConfig.depth * 42}mm × {binConfig.height * 7}mm
+          Physical: {binConfig.width * GRIDFINITY_UNIT}mm × {binConfig.depth * GRIDFINITY_UNIT}mm × {binConfig.height * 7}mm
+          {printerBedWidth && ` · Bed: ${printerBedWidth}×${printerBedDepth}mm`}
         </p>
       </div>
 

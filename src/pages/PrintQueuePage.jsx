@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { generateBaseplates } from '../utils/baseplateGenerator';
+import { packBins, repackFailedBins } from '../utils/binPacker';
+import { loadPrintQueue, savePrintQueue, calculateProgress, preservePlateStatuses } from '../utils/printQueueHelpers';
+import PlateCard from '../components/PlateCard';
 
 const GRIDFINITY_UNIT = 42; // mm
 const HEIGHT_UNIT = 7; // mm
@@ -53,6 +56,19 @@ function buildPrintItems(project) {
   return items;
 }
 
+/**
+ * Build plates from project bins and baseplates using the bin packer.
+ */
+function buildPlates(project) {
+  const baseplates = generateBaseplates(project);
+  const binPlates = packBins(
+    project.bins || [],
+    project.printerBedWidth,
+    project.printerBedDepth
+  );
+  return [...baseplates, ...binPlates];
+}
+
 function PrintQueuePage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -61,6 +77,20 @@ function PrintQueuePage() {
   const [printItems, setPrintItems] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [generatingIds, setGeneratingIds] = useState(new Set());
+
+  // View mode: 'items' or 'plates'
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem(`print-queue-viewmode-${projectId}`) || 'items';
+  });
+
+  // Plates view state
+  const [plates, setPlates] = useState([]);
+  const [generatingPlateIds, setGeneratingPlateIds] = useState(new Set());
+
+  // Persist view mode
+  useEffect(() => {
+    localStorage.setItem(`print-queue-viewmode-${projectId}`, viewMode);
+  }, [viewMode, projectId]);
 
   // Load project and build item list
   useEffect(() => {
@@ -73,13 +103,12 @@ function PrintQueuePage() {
 
     setProject(currentProject);
 
-    // Load saved statuses or generate fresh
+    // --- Per-item view setup ---
     const savedChecklist = localStorage.getItem(`print-checklist-${projectId}`);
     const items = buildPrintItems(currentProject);
 
     if (savedChecklist) {
       const saved = JSON.parse(savedChecklist);
-      // Merge saved statuses into regenerated items
       items.forEach(item => {
         const match = saved.find(s => s.id === item.id);
         if (match) item.status = match.status;
@@ -87,9 +116,18 @@ function PrintQueuePage() {
     }
 
     setPrintItems(items);
+
+    // --- Plates view setup ---
+    const newPlates = buildPlates(currentProject);
+    const savedQueue = loadPrintQueue(projectId);
+    if (savedQueue && savedQueue.plates) {
+      setPlates(preservePlateStatuses(savedQueue.plates, newPlates));
+    } else {
+      setPlates(newPlates);
+    }
   }, [projectId, navigate]);
 
-  // Persist statuses when they change
+  // Persist per-item statuses
   useEffect(() => {
     if (printItems.length > 0) {
       const toSave = printItems.map(({ id, status }) => ({ id, status }));
@@ -97,6 +135,14 @@ function PrintQueuePage() {
     }
   }, [printItems, projectId]);
 
+  // Persist plate statuses
+  useEffect(() => {
+    if (plates.length > 0) {
+      savePrintQueue(projectId, { plates });
+    }
+  }, [plates, projectId]);
+
+  // --- Per-item handlers ---
   const updateStatus = (itemId, newStatus) => {
     setPrintItems(prev => prev.map(item =>
       item.id === itemId ? { ...item, status: newStatus } : item
@@ -159,7 +205,6 @@ function PrintQueuePage() {
         throw new Error(err.detail || `Server error ${resp.status}`);
       }
 
-      // Extract filename from Content-Disposition or build a fallback
       const disposition = resp.headers.get('Content-Disposition') || '';
       const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/);
       const filename = filenameMatch
@@ -195,7 +240,6 @@ function PrintQueuePage() {
   const handleDownloadSelected = () => {
     const selected = printItems.filter(i => selectedIds.has(i.id));
     if (selected.length === 0) return;
-    // Fire off downloads sequentially to avoid overwhelming the server
     selected.reduce(
       (chain, item) => chain.then(() => generateAndDownload(item)),
       Promise.resolve()
@@ -207,6 +251,105 @@ function PrintQueuePage() {
       selectedIds.has(item.id) ? { ...item, status: 'printing' } : item
     ));
     setSelectedIds(new Set());
+  };
+
+  // --- Plates view handlers ---
+  const handlePlateStatusChange = (plateId, newStatus) => {
+    setPlates(prev => prev.map(plate =>
+      plate.id === plateId ? { ...plate, status: newStatus } : plate
+    ));
+  };
+
+  const handleMarkBinFailed = (plateId, itemIndex, isFailed) => {
+    setPlates(prev => prev.map(plate => {
+      if (plate.id !== plateId) return plate;
+      const updatedItems = plate.items.map((item, idx) =>
+        idx === itemIndex ? { ...item, status: isFailed ? 'failed' : 'pending' } : item
+      );
+      return { ...plate, items: updatedItems };
+    }));
+  };
+
+  const handleRepackFailed = (plateId) => {
+    const plate = plates.find(p => p.id === plateId);
+    if (!plate || !project) return;
+
+    const failedItems = plate.items.filter(item => item.status === 'failed');
+    if (failedItems.length === 0) return;
+
+    const reprintPlates = repackFailedBins(
+      failedItems,
+      project.printerBedWidth,
+      project.printerBedDepth
+    );
+
+    // Remove failed items from original plate, add reprint plates
+    setPlates(prev => {
+      const updated = prev.map(p => {
+        if (p.id !== plateId) return p;
+        const remaining = p.items.filter(item => item.status !== 'failed');
+        if (remaining.length === 0) {
+          return { ...p, status: 'done', items: [] };
+        }
+        return { ...p, items: remaining };
+      });
+      return [...updated, ...reprintPlates];
+    });
+  };
+
+  const handleExport3MF = async (plateId) => {
+    const plate = plates.find(p => p.id === plateId);
+    if (!plate || !project) return;
+
+    setGeneratingPlateIds(prev => new Set(prev).add(plateId));
+    try {
+      const body = {
+        name: plate.name,
+        bedWidthMm: project.printerBedWidth,
+        bedDepthMm: project.printerBedDepth,
+        items: plate.items.map(item => ({
+          itemType: plate.type === 'baseplate' ? 'baseplate' : 'bin',
+          binData: item.binData,
+          // Convert corner-origin (packer) to center-origin (3MF mesh placement)
+          xMm: item.x + item.width / 2,
+          yMm: item.y + item.depth / 2,
+          rotation: item.rotation || 0
+        }))
+      };
+
+      const resp = await fetch(`${API_BASE}/api/plate/3mf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || `Server error ${resp.status}`);
+      }
+
+      const disposition = resp.headers.get('Content-Disposition') || '';
+      const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/);
+      const filename = filenameMatch ? filenameMatch[1] : `${plate.name.replace(/\s+/g, '_')}.3mf`;
+
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Failed to export 3MF for ${plate.name}:\n${err.message}`);
+    } finally {
+      setGeneratingPlateIds(prev => {
+        const next = new Set(prev);
+        next.delete(plateId);
+        return next;
+      });
+    }
   };
 
   if (!project) {
@@ -224,11 +367,20 @@ function PrintQueuePage() {
     );
   }
 
-  const completed = printItems.filter(i => i.status === 'done').length;
-  const total = printItems.length;
-  const percentage = total === 0 ? 0 : Math.round((completed / total) * 100);
+  // Progress calculation depends on active view
+  let completed, total, percentage;
+  if (viewMode === 'items') {
+    completed = printItems.filter(i => i.status === 'done').length;
+    total = printItems.length;
+    percentage = total === 0 ? 0 : Math.round((completed / total) * 100);
+  } else {
+    const progress = calculateProgress(plates);
+    completed = progress.completed;
+    total = progress.total;
+    percentage = progress.percentage;
+  }
 
-  const baseplates = printItems.filter(i => i.type === 'baseplate');
+  const baseplateItems = printItems.filter(i => i.type === 'baseplate');
   const hollowBins = printItems.filter(i => i.type === 'hollow');
   const solidBins = printItems.filter(i => i.type === 'solid');
 
@@ -342,6 +494,10 @@ function PrintQueuePage() {
     );
   };
 
+  const progressLabel = viewMode === 'items'
+    ? `${completed} of ${total} objects printed`
+    : `${completed} of ${total} plates done`;
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -424,118 +580,206 @@ function PrintQueuePage() {
             color: colors.textSecondary,
             fontSize: '0.85rem'
           }}>
-            {completed} of {total} objects printed
+            {progressLabel}
           </p>
         </div>
 
-        {/* Batch actions */}
-        {total > 0 && (
-          <div style={{
-            display: 'flex',
-            gap: '0.5rem',
-            marginBottom: '1.5rem',
-            flexWrap: 'wrap'
-          }}>
+        {/* View Mode Toggle */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
-              onClick={selectAllPending}
+              onClick={() => setViewMode('items')}
               style={{
-                padding: '0.5rem 1rem',
-                background: 'transparent',
-                color: colors.primary,
-                border: `2px solid ${colors.primary}`,
+                flex: 1,
+                padding: '0.5rem',
+                background: viewMode === 'items' ? colors.primary : colors.surface,
+                color: viewMode === 'items' ? 'white' : colors.text,
+                border: `1px solid ${colors.border}`,
                 borderRadius: '4px',
                 cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '0.85rem'
-              }}
-            >
-              Select All Pending
-            </button>
-            {selectedIds.size > 0 && (
-              <>
-                <button
-                  onClick={clearSelection}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: 'transparent',
-                    color: colors.textSecondary,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem'
-                  }}
-                >
-                  Clear Selection
-                </button>
-                <button
-                  onClick={handleDownloadSelected}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: colors.success,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '0.85rem'
-                  }}
-                >
-                  Get {selectedIds.size} STL{selectedIds.size === 1 ? '' : 's'}
-                </button>
-                <button
-                  onClick={markSelectedPrinting}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: colors.warning,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '0.85rem'
-                  }}
-                >
-                  Mark {selectedIds.size} as Printing
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {total === 0 && (
-          <div style={{
-            background: colors.surface,
-            padding: '2rem',
-            borderRadius: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            textAlign: 'center'
-          }}>
-            <p style={{ color: colors.textSecondary, marginBottom: '1rem' }}>
-              No objects to print yet. Add bins to your project first.
-            </p>
-            <button
-              onClick={() => navigate(`/project/${projectId}/placer`)}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: colors.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '1rem',
                 fontWeight: 'bold'
               }}
             >
-              Go to Editor
+              Per Item
+            </button>
+            <button
+              onClick={() => setViewMode('plates')}
+              style={{
+                flex: 1,
+                padding: '0.5rem',
+                background: viewMode === 'plates' ? colors.primary : colors.surface,
+                color: viewMode === 'plates' ? 'white' : colors.text,
+                border: `1px solid ${colors.border}`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              Build Plates
             </button>
           </div>
+        </div>
+
+        {/* === Per Item View === */}
+        {viewMode === 'items' && (
+          <>
+            {/* Batch actions */}
+            {total > 0 && (
+              <div style={{
+                display: 'flex',
+                gap: '0.5rem',
+                marginBottom: '1.5rem',
+                flexWrap: 'wrap'
+              }}>
+                <button
+                  onClick={selectAllPending}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: 'transparent',
+                    color: colors.primary,
+                    border: `2px solid ${colors.primary}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  Select All Pending
+                </button>
+                {selectedIds.size > 0 && (
+                  <>
+                    <button
+                      onClick={clearSelection}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: 'transparent',
+                        color: colors.textSecondary,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      Clear Selection
+                    </button>
+                    <button
+                      onClick={handleDownloadSelected}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: colors.success,
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      Get {selectedIds.size} STL{selectedIds.size === 1 ? '' : 's'}
+                    </button>
+                    <button
+                      onClick={markSelectedPrinting}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: colors.warning,
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      Mark {selectedIds.size} as Printing
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {printItems.length === 0 && (
+              <div style={{
+                background: colors.surface,
+                padding: '2rem',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                textAlign: 'center'
+              }}>
+                <p style={{ color: colors.textSecondary, marginBottom: '1rem' }}>
+                  No objects to print yet. Add bins to your project first.
+                </p>
+                <button
+                  onClick={() => navigate(`/project/${projectId}/placer`)}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: colors.primary,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Go to Editor
+                </button>
+              </div>
+            )}
+
+            {/* Object Lists */}
+            {renderSection('Baseplates', baseplateItems)}
+            {renderSection('Hollow Bins', hollowBins)}
+            {renderSection('Solid Bins', solidBins)}
+          </>
         )}
 
-        {/* Object Lists */}
-        {renderSection('Baseplates', baseplates)}
-        {renderSection('Hollow Bins', hollowBins)}
-        {renderSection('Solid Bins', solidBins)}
+        {/* === Build Plates View === */}
+        {viewMode === 'plates' && (
+          <>
+            {plates.length === 0 ? (
+              <div style={{
+                background: colors.surface,
+                padding: '2rem',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                textAlign: 'center'
+              }}>
+                <p style={{ color: colors.textSecondary, marginBottom: '1rem' }}>
+                  No plates to build. Add bins to your project first.
+                </p>
+                <button
+                  onClick={() => navigate(`/project/${projectId}/placer`)}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: colors.primary,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Go to Editor
+                </button>
+              </div>
+            ) : (
+              plates.map(plate => (
+                <PlateCard
+                  key={plate.id}
+                  plate={plate}
+                  onStatusChange={handlePlateStatusChange}
+                  onExport={handleExport3MF}
+                  onMarkBinFailed={handleMarkBinFailed}
+                  onRepackFailed={handleRepackFailed}
+                  exportLabel="Export 3MF"
+                  isExporting={generatingPlateIds.has(plate.id)}
+                />
+              ))
+            )}
+          </>
+        )}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { useTheme } from '../context/ThemeContext';
 import PlatePreview3D from './PlatePreview3D';
 import PlateFailurePanel from './PlateFailurePanel';
 
-function PlateCard({ plate, onStatusChange, onExport, onMarkBinFailed, onRepackFailed }) {
+function PlateCard({ plate, onStatusChange, onExport, onMarkBinFailed, onRepackFailed, exportLabel = 'Export 3MF', isExporting = false }) {
   const { colors } = useTheme();
   const [showItems, setShowItems] = useState(false);
 
@@ -162,19 +162,20 @@ function PlateCard({ plate, onStatusChange, onExport, onMarkBinFailed, onRepackF
       {/* Action Button */}
       <button
         onClick={() => onExport(plate.id)}
+        disabled={isExporting}
         style={{
           width: '100%',
           padding: '0.625rem',
-          background: colors.success,
+          background: isExporting ? colors.textSecondary : colors.success,
           color: 'white',
           border: 'none',
           borderRadius: '4px',
-          cursor: 'pointer',
+          cursor: isExporting ? 'wait' : 'pointer',
           fontWeight: 'bold',
           fontSize: '0.875rem'
         }}
       >
-        📥 Export STL
+        {isExporting ? 'Exporting...' : `📥 ${exportLabel}`}
       </button>
     </div>
   );
