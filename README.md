@@ -1,16 +1,49 @@
-# React + Vite
+# Grid Drawer Maker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-based Gridfinity drawer layout designer. Arrange bins on a grid that maps to your physical drawer dimensions, then export STL/3MF files for 3D printing.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Node.js** (v18+)
+- **[gridfinity-server](https://github.com/kiprepscher/gridfinity-server)** (optional) — required for STL and 3MF file generation
 
-## React Compiler
+## Quick Start
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+The app runs at `http://localhost:5174/grid-drawer-maker/`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Environment Variables
+
+Copy `.env.example` to `.env` to customize:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_API_BASE` | `http://localhost:8000` | URL of your gridfinity-server instance |
+
+You can also change the server URL at runtime via the settings gear on the Projects page.
+
+## Deployment
+
+The app is configured for GitHub Pages deployment:
+
+```bash
+npm run build    # Build to dist/
+npm run deploy   # Deploy to GitHub Pages
+```
+
+## Features
+
+- Create drawer projects with custom dimensions
+- Visual bin placement editor with grid snapping
+- Print queue with per-item and build-plate views
+- STL export for individual items
+- 3MF export for pre-arranged build plates
+- Dark mode

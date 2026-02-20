@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 
 function ProjectsPage() {
   const navigate = useNavigate();
   const { colors, theme, toggleTheme } = useTheme();
+  const { apiBase, apiKey, defaultApiBase, updateSettings } = useSettings();
   const [projects, setProjects] = useState([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -394,6 +396,71 @@ function ProjectsPage() {
                     Toggle
                   </button>
                 </label>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ color: colors.text, fontSize: '1.125rem', marginBottom: '1rem' }}>Server</h3>
+
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.25rem', color: colors.text, fontWeight: 'bold', fontSize: '0.9rem' }}>
+                    Server URL
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type="text"
+                      value={apiBase}
+                      onChange={(e) => updateSettings({ apiBase: e.target.value })}
+                      placeholder={defaultApiBase}
+                      style={{
+                        flex: 1,
+                        padding: '0.5rem',
+                        border: `1px solid ${colors.inputBorder}`,
+                        borderRadius: '4px',
+                        background: colors.input,
+                        color: colors.text,
+                        fontSize: '0.9rem'
+                      }}
+                    />
+                    {apiBase !== defaultApiBase && (
+                      <button
+                        onClick={() => updateSettings({ apiBase: defaultApiBase })}
+                        title="Reset to default"
+                        style={{
+                          padding: '0.5rem 0.75rem',
+                          background: colors.input,
+                          color: colors.textSecondary,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.25rem', color: colors.text, fontWeight: 'bold', fontSize: '0.9rem' }}>
+                    API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => updateSettings({ apiKey: e.target.value })}
+                    placeholder="Optional — for future use"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      border: `1px solid ${colors.inputBorder}`,
+                      borderRadius: '4px',
+                      background: colors.input,
+                      color: colors.text,
+                      fontSize: '0.9rem'
+                    }}
+                  />
+                </div>
               </div>
 
               <button

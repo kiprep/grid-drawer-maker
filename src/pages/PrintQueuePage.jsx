@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 import { generateBaseplates } from '../utils/baseplateGenerator';
 import { packBins, repackFailedBins } from '../utils/binPacker';
 import { loadPrintQueue, savePrintQueue, calculateProgress, preservePlateStatuses } from '../utils/printQueueHelpers';
@@ -8,8 +9,6 @@ import PlateCard from '../components/PlateCard';
 
 const GRIDFINITY_UNIT = 42; // mm
 const HEIGHT_UNIT = 7; // mm
-const API_BASE = 'http://localhost:8000';
-
 /**
  * Build a flat list of printable objects from the project.
  * Each object gets: id, name, description, type ('baseplate' | 'hollow' | 'solid'), dims, status
@@ -73,6 +72,7 @@ function PrintQueuePage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { colors } = useTheme();
+  const { apiBase: API_BASE } = useSettings();
   const [project, setProject] = useState(null);
   const [printItems, setPrintItems] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());

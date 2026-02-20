@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
+import { SettingsProvider } from './context/SettingsContext';
 import LandingPage from './pages/LandingPage';
 import ProjectsPage from './pages/ProjectsPage';
 import BinPlacerPage from './pages/BinPlacerPage';
@@ -11,7 +12,8 @@ import './App.css';
 function App() {
   return (
     <ThemeProvider>
-      <Router>
+      <SettingsProvider>
+      <Router basename="/grid-drawer-maker">
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
@@ -22,6 +24,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
+      </SettingsProvider>
     </ThemeProvider>
   );
 }
