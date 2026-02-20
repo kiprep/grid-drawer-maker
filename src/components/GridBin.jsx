@@ -1,12 +1,63 @@
 import { useRef, useState, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
-import { Text } from '@react-three/drei';
+import { Text, Html } from '@react-three/drei';
 
-function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange }) {
+function RenameInput({ bin, position, isSelected, onRenameCommit, onRenameCancel }) {
+  const { camera, gl } = useThree();
+
+  // Project the bin's left and right edges to screen space to get pixel width
+  const screenWidth = useMemo(() => {
+    const halfW = (bin.width * 42) / 2;
+    const y = position[1];
+    const z = position[2];
+    const left = new THREE.Vector3(position[0] - halfW, y, z).project(camera);
+    const right = new THREE.Vector3(position[0] + halfW, y, z).project(camera);
+    const rect = gl.domElement.getBoundingClientRect();
+    return Math.abs(right.x - left.x) * rect.width / 2;
+  }, [bin.width, position, camera, gl]);
+
+  const inputWidth = Math.max(screenWidth - 8, 60);
+
+  return (
+    <Html
+      position={[0, (bin.height * 7) / 2 + 2, 0]}
+      center
+      style={{ pointerEvents: 'auto' }}
+    >
+      <input
+        autoFocus
+        type="text"
+        defaultValue={bin.label || ''}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') onRenameCommit(e.target.value);
+          else if (e.key === 'Escape') onRenameCancel();
+        }}
+        onBlur={(e) => onRenameCommit(e.target.value)}
+        style={{
+          background: isSelected ? '#e0e7ff' : '#ffffff',
+          color: isSelected ? '#3730a3' : '#1a1a1a',
+          border: 'none',
+          borderRadius: '2px',
+          padding: '4px 6px',
+          fontSize: '14px',
+          fontFamily: 'sans-serif',
+          textAlign: 'center',
+          width: `${inputWidth}px`,
+          outline: `2px solid ${isSelected ? '#3730a3' : '#666'}`,
+          boxSizing: 'border-box'
+        }}
+      />
+    </Html>
+  );
+}
+
+function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange, onDoubleClick, isRenaming, onRenameCommit, onRenameCancel }) {
   const meshRef = useRef();
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef(null);
+  const lastClickTime = useRef(0);
   const { gl, camera, raycaster } = useThree();
   const [textBounds, setTextBounds] = useState(null);
 
@@ -97,10 +148,18 @@ function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange }) {
       }
     };
 
-    const handleGlobalPointerUp = () => {
-      // If we didn't drag, just select the bin
-      if (dragStartPos.current && !isDragging) {
-        onClick(bin);
+    const handleGlobalPointerUp = (e) => {
+      const wasClick = dragStartPos.current && !isDragging;
+
+      if (wasClick) {
+        const now = Date.now();
+        if (now - lastClickTime.current < 400 && onDoubleClick) {
+          onDoubleClick(bin);
+          lastClickTime.current = 0;
+        } else {
+          onClick(bin);
+          lastClickTime.current = now;
+        }
       }
 
       setIsDragging(false);
@@ -145,8 +204,19 @@ function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange }) {
         />
       </lineSegments>
 
-      {/* Label - only show if bin has a label and is large enough */}
-      {bin.label && (bin.width >= 2 || bin.depth >= 2) && (
+      {/* Inline rename input — sized to match the bin's screen width */}
+      {isRenaming && (
+        <RenameInput
+          bin={bin}
+          position={position}
+          isSelected={isSelected}
+          onRenameCommit={onRenameCommit}
+          onRenameCancel={onRenameCancel}
+        />
+      )}
+
+      {/* Label - only show if bin has a label and is large enough and not renaming */}
+      {!isRenaming && bin.label && (bin.width >= 2 || bin.depth >= 2) && (
         <>
           {/* Text label */}
           <Text

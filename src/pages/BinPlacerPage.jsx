@@ -54,6 +54,7 @@ function BinPlacerPage() {
   const [is3DMode, setIs3DMode] = useState(false);
   const [placementMode, setPlacementMode] = useState(null); // bin to place
   const [zoomLevel, setZoomLevel] = useState(1); // 0.5, 1, 1.5, 2, 2.5
+  const [renamingBinId, setRenamingBinId] = useState(null);
 
   // Load project from localStorage
   useEffect(() => {
@@ -253,9 +254,11 @@ function BinPlacerPage() {
     };
     saveProject(updatedProject);
 
-    // Deselect if this was selected
     if (selectedBin?.id === binId) {
       setSelectedBin(null);
+    }
+    if (renamingBinId === binId) {
+      setRenamingBinId(null);
     }
   };
 
@@ -424,6 +427,24 @@ function BinPlacerPage() {
     setSelectedBin(null);
   };
 
+  const handleDoubleClickBin = (bin) => {
+    setSelectedBin(bin);
+    setRenamingBinId(bin.id);
+  };
+
+  const commitRename = (binId, value) => {
+    const trimmed = value.trim();
+    const updatedBins = project.bins.map(b =>
+      b.id === binId ? { ...b, label: trimmed || b.label } : b
+    );
+    const updatedProject = { ...project, bins: updatedBins };
+    saveProject(updatedProject);
+    if (selectedBin?.id === binId) {
+      setSelectedBin({ ...selectedBin, label: trimmed || selectedBin.label });
+    }
+    setRenamingBinId(null);
+  };
+
   const canCopyFit = (binId) => {
     if (!binId || !project) return false;
 
@@ -459,6 +480,13 @@ function BinPlacerPage() {
       if (e.code === 'Space') {
         e.preventDefault();
         handleRotateBin(selectedBin.id);
+        return;
+      }
+
+      // Delete/Backspace to remove selected bin
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        handleDeletePlacedBin(selectedBin.id);
         return;
       }
 
@@ -680,6 +708,10 @@ function BinPlacerPage() {
               isSelected={selectedBin?.id === bin.id}
               onClick={setSelectedBin}
               onPositionChange={handleBinPositionChange}
+              onDoubleClick={handleDoubleClickBin}
+              isRenaming={renamingBinId === bin.id}
+              onRenameCommit={(value) => commitRename(bin.id, value)}
+              onRenameCancel={() => setRenamingBinId(null)}
             />
           ))}
 
@@ -968,6 +1000,8 @@ function BinPlacerPage() {
             Max Height: {project.drawerHeight}mm
           </div>
         </div>
+
+
       </div>
 
       {/* Floating Create Bin Panel */}
