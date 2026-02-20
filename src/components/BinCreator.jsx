@@ -44,7 +44,9 @@ function BinCreator({ onCreateBin, maxHeight, printerBedWidth, printerBedDepth }
     ]);
   }, []);
 
+  const intKeys = new Set(['width', 'depth', 'height']);
   const updateConfig = (key, value) => {
+    if (intKeys.has(key)) value = Math.max(1, Math.floor(value));
     setBinConfig({ ...binConfig, [key]: value });
   };
 
@@ -53,7 +55,7 @@ function BinCreator({ onCreateBin, maxHeight, printerBedWidth, printerBedDepth }
       ...binConfig,
       dividers: {
         ...binConfig.dividers,
-        [direction]: value
+        [direction]: Math.max(0, Math.floor(value))
       }
     });
   };
@@ -187,6 +189,7 @@ function BinCreator({ onCreateBin, maxHeight, printerBedWidth, printerBedDepth }
               type="number"
               min="1"
               max={maxWidthUnits}
+              step="1"
               value={binConfig.width}
               onChange={(e) => updateConfig('width', Number(e.target.value))}
               onFocus={(e) => e.target.select()}
@@ -199,6 +202,7 @@ function BinCreator({ onCreateBin, maxHeight, printerBedWidth, printerBedDepth }
               type="number"
               min="1"
               max={maxDepthUnits}
+              step="1"
               value={binConfig.depth}
               onChange={(e) => updateConfig('depth', Number(e.target.value))}
               onFocus={(e) => e.target.select()}
@@ -213,6 +217,7 @@ function BinCreator({ onCreateBin, maxHeight, printerBedWidth, printerBedDepth }
               type="number"
               min="1"
               max={maxHeightUnits}
+              step="1"
               value={binConfig.height}
               onChange={(e) => updateConfig('height', Number(e.target.value))}
               onFocus={(e) => e.target.select()}

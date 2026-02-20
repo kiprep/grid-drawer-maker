@@ -6,7 +6,7 @@ import { useSettings } from '../context/SettingsContext';
 function ProjectsPage() {
   const navigate = useNavigate();
   const { colors, theme, toggleTheme } = useTheme();
-  const { apiBase, apiKey, defaultApiBase, updateSettings } = useSettings();
+  const { apiBase, apiKey, showLabelBackground, defaultApiBase, updateSettings } = useSettings();
   const [projects, setProjects] = useState([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -394,6 +394,34 @@ function ProjectsPage() {
                     }}
                   >
                     Toggle
+                  </button>
+                </label>
+
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  padding: '0.75rem',
+                  background: colors.input,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '4px',
+                  marginTop: '0.5rem'
+                }}>
+                  <span style={{ color: colors.text, fontWeight: 'bold' }}>Label Background</span>
+                  <button
+                    onClick={() => updateSettings({ showLabelBackground: !showLabelBackground })}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: showLabelBackground ? colors.success : colors.textSecondary,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {showLabelBackground ? 'On' : 'Off'}
                   </button>
                 </label>
               </div>

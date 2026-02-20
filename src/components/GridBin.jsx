@@ -53,7 +53,7 @@ function RenameInput({ bin, position, isSelected, onRenameCommit, onRenameCancel
   );
 }
 
-function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange, onDoubleClick, isRenaming, onRenameCommit, onRenameCancel }) {
+function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange, onDoubleClick, isRenaming, onRenameCommit, onRenameCancel, showLabelBackground = true }) {
   const meshRef = useRef();
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef(null);
@@ -223,7 +223,7 @@ function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange, onDoubl
             position={[0, (bin.height * 7) / 2 + 2, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
             fontSize={Math.min(bin.width * 10, bin.depth * 10, 20)}
-            color={isSelected ? '#3730a3' : '#1a1a1a'}
+            color={isSelected ? '#ffffff' : '#1a1a1a'}
             anchorX="center"
             anchorY="middle"
             maxWidth={(Math.min(bin.width, bin.depth) * 42) - 12}
@@ -242,14 +242,14 @@ function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange, onDoubl
           </Text>
 
           {/* Background rectangle for label - render after text so it appears behind */}
-          {textBounds && (
+          {showLabelBackground && textBounds && (
             <mesh
               position={[0, (bin.height * 7) / 2 + 1.5, 0]}
               rotation={[-Math.PI / 2, 0, 0]}
             >
               <planeGeometry args={[textBounds.width + 6, textBounds.height + 4]} />
               <meshBasicMaterial
-                color={isSelected ? '#e0e7ff' : '#ffffff'}
+                color={isSelected ? '#4338ca' : '#ffffff'}
                 transparent
                 opacity={0.9}
                 depthTest={false}

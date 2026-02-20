@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 import BinCreator from '../components/BinCreator';
 import BinEditor from '../components/BinEditor';
 import GridBin from '../components/GridBin';
@@ -47,6 +48,7 @@ function BinPlacerPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { colors } = useTheme();
+  const { showLabelBackground } = useSettings();
   const [project, setProject] = useState(null);
   const [selectedBin, setSelectedBin] = useState(null);
   const [activeWidget, setActiveWidget] = useState(null);
@@ -55,6 +57,7 @@ function BinPlacerPage() {
   const [placementMode, setPlacementMode] = useState(null); // bin to place
   const [zoomLevel, setZoomLevel] = useState(1); // 0.5, 1, 1.5, 2, 2.5
   const [renamingBinId, setRenamingBinId] = useState(null);
+  const [clipboardBin, setClipboardBin] = useState(null);
 
   // Load project from localStorage
   useEffect(() => {
@@ -538,6 +541,41 @@ function BinPlacerPage() {
     };
   }, [selectedBin, project]);
 
+  // Cmd/Ctrl+C to copy, Cmd/Ctrl+V to paste
+  useEffect(() => {
+    if (!project) return;
+
+    const handleCopyPaste = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+
+      if (e.key === 'c' && selectedBin) {
+        e.preventDefault();
+        setClipboardBin(selectedBin);
+      } else if (e.key === 'v' && clipboardBin) {
+        e.preventDefault();
+        const copiedBin = {
+          ...clipboardBin,
+          id: Date.now().toString(),
+          label: generateCopyName(clipboardBin.label || `${clipboardBin.type === 'hollow' ? 'Hollow' : 'Solid'} Bin`)
+        };
+        delete copiedBin.x;
+        delete copiedBin.y;
+
+        if (!canBinFitAnywhere(copiedBin)) {
+          alert("Cannot paste - no space available on the grid.");
+          return;
+        }
+        setPlacementMode(copiedBin);
+        setSelectedBin(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleCopyPaste);
+    return () => window.removeEventListener('keydown', handleCopyPaste);
+  }, [selectedBin, clipboardBin, project]);
+
   if (!project) {
     return <div>Loading...</div>;
   }
@@ -712,6 +750,7 @@ function BinPlacerPage() {
               isRenaming={renamingBinId === bin.id}
               onRenameCommit={(value) => commitRename(bin.id, value)}
               onRenameCancel={() => setRenamingBinId(null)}
+              showLabelBackground={showLabelBackground}
             />
           ))}
 

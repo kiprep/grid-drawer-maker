@@ -18,7 +18,8 @@ export function SettingsProvider({ children }) {
     const saved = loadSettings();
     return {
       apiBase: saved.apiBase || DEFAULT_API_BASE,
-      apiKey: saved.apiKey || ''
+      apiKey: saved.apiKey || '',
+      showLabelBackground: saved.showLabelBackground !== undefined ? saved.showLabelBackground : true
     };
   });
 

@@ -97,7 +97,107 @@ export function packBins(bins, printerBedWidth, printerBedDepth) {
     }
   }
 
+  // Balance items across plates so render times are more even.
+  // Re-assign items to plates using least-area-first, then re-pack spatially.
+  if (plates.length > 1) {
+    return balancePlates(plates, printerBedWidth, printerBedDepth);
+  }
+
   return plates;
+}
+
+/**
+ * Redistribute items evenly across N plates, then re-pack each one spatially.
+ * Uses a least-area-first assignment so no single plate is much heavier than others.
+ */
+function balancePlates(plates, maxWidth, maxDepth) {
+  // Collect all successfully packed items (skip oversized plates)
+  const oversized = plates.filter(p => p.warning);
+  const normal = plates.filter(p => !p.warning);
+
+  if (normal.length <= 1) return plates;
+
+  // Gather all items from normal plates, preserving their original (unrotated) dims
+  const allItems = [];
+  for (const plate of normal) {
+    for (const item of plate.items) {
+      allItems.push({
+        ...item,
+        // Reset placement — will be re-packed
+        x: 0,
+        y: 0,
+        rotation: 0,
+        width: item.binData.width * GRIDFINITY_UNIT,
+        depth: item.binData.depth * GRIDFINITY_UNIT
+      });
+    }
+  }
+
+  // Sort largest first for better packing
+  allItems.sort((a, b) => (b.width * b.depth) - (a.width * a.depth));
+
+  // Create empty target plates (same count as greedy result)
+  const numPlates = normal.length;
+  const balanced = [];
+  for (let i = 0; i < numPlates; i++) {
+    balanced.push(createNewPlate(i + 1, maxWidth, maxDepth));
+  }
+
+  // Track total area per plate for load-balancing assignment
+  const plateAreas = new Array(numPlates).fill(0);
+
+  // Assign each item to the plate with the least total area,
+  // but only if it actually fits spatially. Fall back to first-fit if needed.
+  for (const item of allItems) {
+    // Get plate indices sorted by current area (least loaded first)
+    const order = plateAreas
+      .map((area, idx) => ({ idx, area }))
+      .sort((a, b) => a.area - b.area)
+      .map(o => o.idx);
+
+    let placed = false;
+    for (const idx of order) {
+      if (tryPlaceOnPlate(item, balanced[idx], maxWidth, maxDepth)) {
+        plateAreas[idx] += item.width * item.depth;
+        placed = true;
+        break;
+      }
+      // Try rotated
+      const rotated = {
+        ...item,
+        width: item.depth,
+        depth: item.width,
+        rotation: 90
+      };
+      if (tryPlaceOnPlate(rotated, balanced[idx], maxWidth, maxDepth)) {
+        Object.assign(item, rotated);
+        plateAreas[idx] += item.width * item.depth;
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      // Shouldn't happen since greedy already fit everything, but just in case
+      const extra = createNewPlate(balanced.length + 1, maxWidth, maxDepth);
+      item.x = 0;
+      item.y = 0;
+      extra.items.push({ ...item });
+      balanced.push(extra);
+      plateAreas.push(item.width * item.depth);
+    }
+  }
+
+  // Remove any empty plates (can happen if balancing shifts items around)
+  const result = balanced.filter(p => p.items.length > 0);
+
+  // Re-number plates
+  result.forEach((plate, i) => {
+    plate.id = `bins-${i + 1}`;
+    plate.name = `Bin Plate ${i + 1}`;
+  });
+
+  return [...result, ...oversized];
 }
 
 /**
