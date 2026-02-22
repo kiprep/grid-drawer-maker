@@ -53,7 +53,7 @@ function RenameInput({ bin, position, isSelected, onRenameCommit, onRenameCancel
   );
 }
 
-function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange, onDoubleClick, isRenaming, onRenameCommit, onRenameCancel, showLabelBackground = true }) {
+function GridBin({ bin, gridSize, isSelected, onClick, onPositionChange, onDoubleClick, isRenaming, onRenameCommit, onRenameCancel, showLabelBackground = false }) {
   const meshRef = useRef();
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef(null);

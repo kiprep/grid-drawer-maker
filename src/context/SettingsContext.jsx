@@ -19,7 +19,7 @@ export function SettingsProvider({ children }) {
     return {
       apiBase: saved.apiBase || DEFAULT_API_BASE,
       apiKey: saved.apiKey || '',
-      showLabelBackground: saved.showLabelBackground !== undefined ? saved.showLabelBackground : true
+      showLabelBackground: saved.showLabelBackground !== undefined ? saved.showLabelBackground : false
     };
   });
 
